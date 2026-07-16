@@ -6,26 +6,17 @@ import {
   getQuestions,
   getQuestionState,
 } from "@/lib/data";
-import { createClient } from "@/lib/supabase/server";
 
 export default async function ProfilePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const profile = await getProfile();
+  if (!profile) redirect("/login");
 
-  const [profile, questions, state] = await Promise.all([
-    getProfile(),
+  const [questions, state] = await Promise.all([
     getQuestions(),
     getQuestionState(),
   ]);
 
-  const name =
-    profile?.full_name ||
-    (user.user_metadata?.full_name as string) ||
-    user.email?.split("@")[0] ||
-    "Member";
+  const name = profile.full_name || profile.email.split("@")[0] || "Member";
   const initials = name
     .split(/\s+/)
     .map((p: string) => p[0])
@@ -36,7 +27,7 @@ export default async function ProfilePage() {
   const tally = { Low: 0, Medium: 0, High: 0 };
   for (const q of questions) tally[effectiveConfidence(q, state)]++;
 
-  const memberSince = new Date(user.created_at).toLocaleDateString("en-US", {
+  const memberSince = new Date(profile.created_at).toLocaleDateString("en-US", {
     month: "short",
     year: "numeric",
   });
@@ -87,7 +78,7 @@ export default async function ProfilePage() {
             {name}
           </div>
           <div style={{ color: "var(--ink-faint)", fontSize: 13.5 }}>
-            {user.email}
+            {profile.email}
           </div>
         </div>
         <form action={logout}>
@@ -145,9 +136,9 @@ export default async function ProfilePage() {
           Account
         </div>
         <div style={{ fontSize: 13.5, color: "var(--ink-soft)", lineHeight: 2 }}>
-          Identity provider: Supabase Auth
+          Identity provider: interview-prep-api (JWT)
           <br />
-          Role: {profile?.role === "admin" ? "Admin" : "Member"}
+          Role: {profile.role === "admin" ? "Admin" : "Member"}
           <br />
           Member since: {memberSince}
         </div>

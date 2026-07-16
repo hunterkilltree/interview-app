@@ -1,83 +1,114 @@
 # software-engineer-life — Interview Prep App
 
-Next.js (App Router) + Supabase port of the InterviewPrepApp design. Tracks coding practice
-confidence and notes per LeetCode problem, a knowledge base across 8 tracks, per-user auth,
-an admin content editor, and an optional AI coach powered by the Anthropic API.
+Full-stack port of the InterviewPrepApp design.
 
-## Stack
+- **Frontend** — Next.js 15 (App Router), UI matching the design 1:1, deploys on Vercel
+- **Backend** — Spring Boot 4 (Java 21) REST API in `backend/`, JWT auth, deploys on Render
+- **Database** — PostgreSQL (free tier on Supabase or Neon), managed by Flyway
 
-- Next.js 15 (App Router, Server Components, Server Actions) — deploys free on Vercel
-- Supabase — Postgres, auth (email/password), row-level security — free tier
-- Anthropic API — AI coaching tips in the coding drawer (optional)
+The backend follows the conventions from
+[rrezartprebreza/spring-boot-skills](https://github.com/rrezartprebreza/spring-boot-skills)
+(`skills/spring-boot-4`): layered architecture, `ApiResponse` envelope, Security 7 lambda DSL,
+UUID ids, Flyway migrations, constructor injection.
 
-## 1. Supabase setup (free)
+## Architecture
 
-1. Create a project at https://supabase.com (free tier).
-2. Open **SQL Editor → New query**, paste the contents of `supabase/schema.sql`, and run it.
-   This creates the tables, row-level security policies, and seed content from the design.
-3. Go to **Project Settings → API** and copy the Project URL and `anon` public key.
-4. (Optional, for local testing) **Authentication → Sign In / Up → Email**: disable
-   "Confirm email" so signups work instantly without an SMTP setup.
+```
+Browser ──> Next.js (Vercel)  ── server-side fetch + JWT ──> Spring Boot API (Render) ──> Postgres
+             httpOnly cookies                                  /api/v1/**
+```
 
-## 2. Local development
+Tokens (15-min access + 7-day refresh) are issued by the API and stored as httpOnly cookies
+by the Next.js server; the middleware auto-refreshes expired access tokens.
+
+## API surface
+
+```
+POST   /api/v1/auth/register | login | refresh
+GET    /api/v1/me
+GET    /api/v1/questions                    (paginated envelope)
+GET    /api/v1/docs[?section=]   /docs/{id}
+GET    /api/v1/question-state               (per-user)
+PUT    /api/v1/question-state/{questionId}  {confidence?, notes?}
+POST   /api/v1/ai/coach                     {questionId, confidence?, notes?}
+POST/PUT/DELETE /api/v1/admin/questions[/{id}]   (ROLE_ADMIN)
+POST/PUT/DELETE /api/v1/admin/docs[/{id}]        (ROLE_ADMIN)
+GET    /actuator/health
+```
+
+All responses use the `{success, data, error, timestamp}` envelope.
+
+## 1. Database (free)
+
+Create a free Postgres database (Supabase → Project Settings → Database, or https://neon.tech).
+No schema setup needed — Flyway runs `backend/src/main/resources/db/migration/` on startup
+(tables + seed content from the design).
+
+## 2. Run the backend locally
+
+Requires Java 21 + Maven 3.9+ (or Docker).
 
 ```bash
-cp .env.example .env.local   # fill in your Supabase URL + anon key
+cd backend
+export DATABASE_URL=jdbc:postgresql://localhost:5432/interviewprep
+export DATABASE_USER=postgres
+export DATABASE_PASSWORD=postgres
+export JWT_SECRET=$(openssl rand -base64 48)
+export ADMIN_EMAIL=you@example.com        # promoted to admin on next boot after signup
+export ANTHROPIC_API_KEY=sk-ant-...       # optional, enables AI coach
+mvn spring-boot:run
+```
+
+Or with Docker: `docker build -t interview-prep-api . && docker run -p 8080:8080 --env-file .env interview-prep-api`
+
+## 3. Run the frontend locally
+
+```bash
+cp .env.example .env.local    # API_URL=http://localhost:8080
 npm install
 npm run dev
 ```
 
-Open http://localhost:3000, create an account, then make yourself admin
-(SQL Editor):
+Open http://localhost:3000, create an account. To become admin: set `ADMIN_EMAIL` to your
+signup email and restart the backend (promotion runs at boot).
 
-```sql
-update public.profiles set role = 'admin'
-  where id = (select id from auth.users where email = 'you@example.com');
-```
+## 4. Deploy (all free tiers)
 
-The Admin tab appears after you refresh.
+**Backend → Render**
+1. Push to GitHub. In Render: New → Web Service → pick the repo, set **Root Directory** = `backend`,
+   Runtime = Docker (uses `backend/Dockerfile`).
+2. Env vars: `DATABASE_URL` (jdbc URL), `DATABASE_USER`, `DATABASE_PASSWORD`, `JWT_SECRET`,
+   `CORS_ALLOWED_ORIGINS=https://your-app.vercel.app`, `ADMIN_EMAIL`, `ANTHROPIC_API_KEY` (optional).
+3. Health check path: `/actuator/health`.
+   Note: Render free sleeps after ~15 min idle; first request after that takes ~50 s.
 
-## 3. AI coach (optional)
+**Frontend → Vercel**
+1. New → Project → import the repo (Next.js auto-detected, root directory = repo root).
+2. Env var: `API_URL=https://your-api.onrender.com`.
 
-Set `ANTHROPIC_API_KEY` in `.env.local` (and later in Vercel). Get a key at
-https://console.anthropic.com. The route `app/api/ai/coach/route.ts` uses
-`claude-haiku-4-5` — pay-per-use, typically well under a cent per request.
-Without the key the app still works; the coach button shows a friendly message.
-
-## 4. Deploy to Vercel (free)
-
-1. Push this folder to a GitHub repo.
-2. Go to https://vercel.com → **Add New → Project** → import the repo
-   (framework auto-detects as Next.js; no config needed).
-3. Under **Environment Variables**, add:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `ANTHROPIC_API_KEY` (optional)
-4. Deploy. Done — Vercel's Hobby plan has no cold-start problem for this app.
-
-Everything runs on Vercel + Supabase free tiers; the only possible cost is
-Anthropic API usage if you enable the AI coach.
+**Database → Supabase or Neon** free Postgres; put its JDBC credentials in Render.
 
 ## Project layout
 
 ```
-app/
-  login/               login screen (email/password, sign up)
-  (app)/               authenticated shell (nav + guard)
-    page.tsx           dashboard (readiness ring, track bars, recent questions)
-    coding/            LeetCode tracker (confidence, notes, AI coach drawer)
-    knowledge/         knowledge base grid + /knowledge/[id] doc view
-    admin/             content editor (admins only)
-    profile/           profile, confidence breakdown, sign out
-  api/ai/coach/        Anthropic-backed coaching route
-components/            shared UI (Nav, badges, dots, chips)
-lib/                   Supabase clients, data helpers, types, sections
-supabase/schema.sql    tables + RLS + seed data
+app/                      Next.js frontend (screens from the design)
+components/               shared UI
+lib/api.ts                Spring API client (envelope + JWT cookies)
+lib/data.ts               typed data access via the API
+middleware.ts             auth guard + token refresh
+backend/
+  src/main/java/life/swengineer/interviewprep/
+    auth/                 JWT service, filter, auth endpoints
+    user/                 User entity, /me, current-user resolution
+    content/              questions, docs, per-user state (+ admin CRUD)
+    ai/                   AI coach (Anthropic API via RestClient)
+    common/               ApiResponse envelope, global exception handler
+    config/               SecurityConfig, admin bootstrap
+  src/main/resources/db/migration/   Flyway V1..V3 (schema + seed)
+  Dockerfile
 ```
 
-## Notes
+## Verify
 
-- Content (questions/docs) is global and editable by admins; confidence + notes
-  are per-user (`question_state` with RLS).
-- The original design's "Continue with Keycloak" SSO was adapted to Supabase
-  email/password auth. Keycloak/OIDC can be added later via Supabase's SSO options.
+- Frontend: `npm run build`
+- Backend: `cd backend && mvn verify` (needs network access to Maven Central)

@@ -1,36 +1,21 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { apiFetch } from "@/lib/api";
 import type { Confidence } from "@/lib/types";
 
-async function upsertState(
-  questionId: string,
-  patch: { confidence?: Confidence; notes?: string }
-) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
-
-  const { error } = await supabase.from("question_state").upsert(
-    {
-      user_id: user.id,
-      question_id: questionId,
-      ...patch,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id,question_id" }
-  );
-  if (error) throw new Error(error.message);
+export async function setConfidence(questionId: string, level: Confidence) {
+  await apiFetch(`/api/v1/question-state/${questionId}`, {
+    method: "PUT",
+    body: JSON.stringify({ confidence: level }),
+  });
   revalidatePath("/", "layout");
 }
 
-export async function setConfidence(questionId: string, level: Confidence) {
-  await upsertState(questionId, { confidence: level });
-}
-
 export async function setNotes(questionId: string, notes: string) {
-  await upsertState(questionId, { notes });
+  await apiFetch(`/api/v1/question-state/${questionId}`, {
+    method: "PUT",
+    body: JSON.stringify({ notes }),
+  });
+  revalidatePath("/", "layout");
 }

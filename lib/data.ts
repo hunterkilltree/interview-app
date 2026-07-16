@@ -1,71 +1,104 @@
-import { createClient } from "@/lib/supabase/server";
-import type { Confidence, Doc, Profile, Question, QuestionState } from "./types";
+import { apiFetch } from "@/lib/api";
+import type { Confidence, Doc, Profile, Question } from "./types";
 
-export async function getCurrentUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
-}
+type PageEnvelope<T> = { content: T[] };
+
+type ApiQuestion = {
+  id: string;
+  section: string;
+  title: string;
+  difficulty: Question["difficulty"];
+  leetcode: string;
+  defaultConfidence: Confidence;
+  defaultNotes: string;
+};
+
+type ApiDoc = {
+  id: string;
+  section: string;
+  title: string;
+  type: string;
+  excerpt: string;
+  body: string;
+  hasImage: boolean;
+};
+
+type ApiState = { questionId: string; confidence: Confidence | null; notes: string | null };
+
+type ApiUser = {
+  id: string;
+  email: string;
+  fullName: string;
+  role: "MEMBER" | "ADMIN";
+  createdAt: string;
+};
 
 export async function getProfile(): Promise<Profile | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data } = await supabase
-    .from("profiles")
-    .select("id, full_name, role")
-    .eq("id", user.id)
-    .single();
-  return (data as Profile) ?? null;
+  try {
+    const me = await apiFetch<ApiUser>("/api/v1/me");
+    return {
+      id: me.id,
+      full_name: me.fullName,
+      email: me.email,
+      created_at: me.createdAt,
+      role: me.role === "ADMIN" ? "admin" : "member",
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function getQuestions(): Promise<Question[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("questions")
-    .select("*")
-    .order("created_at", { ascending: true });
-  if (error) throw new Error(error.message);
-  return (data as Question[]) ?? [];
+  const page = await apiFetch<PageEnvelope<ApiQuestion>>("/api/v1/questions?size=100");
+  return page.content.map((q) => ({
+    id: q.id,
+    section: q.section,
+    title: q.title,
+    difficulty: q.difficulty,
+    leetcode: q.leetcode,
+    default_confidence: q.defaultConfidence,
+    default_notes: q.defaultNotes,
+  }));
 }
 
 export async function getDocs(): Promise<Doc[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("docs")
-    .select("*")
-    .order("created_at", { ascending: true });
-  if (error) throw new Error(error.message);
-  return (data as Doc[]) ?? [];
+  const page = await apiFetch<PageEnvelope<ApiDoc>>("/api/v1/docs?size=100");
+  return page.content.map(mapDoc);
 }
 
 export async function getDoc(id: string): Promise<Doc | null> {
-  const supabase = await createClient();
-  const { data } = await supabase.from("docs").select("*").eq("id", id).single();
-  return (data as Doc) ?? null;
+  try {
+    return mapDoc(await apiFetch<ApiDoc>(`/api/v1/docs/${id}`));
+  } catch {
+    return null;
+  }
+}
+
+function mapDoc(d: ApiDoc): Doc {
+  return {
+    id: d.id,
+    section: d.section,
+    title: d.title,
+    type: d.type,
+    excerpt: d.excerpt,
+    body: d.body,
+    has_image: d.hasImage,
+  };
 }
 
 export async function getQuestionState(): Promise<
   Record<string, { confidence: Confidence | null; notes: string | null }>
 > {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return {};
-  const { data } = await supabase
-    .from("question_state")
-    .select("question_id, confidence, notes")
-    .eq("user_id", user.id);
-  const map: Record<string, { confidence: Confidence | null; notes: string | null }> = {};
-  for (const row of (data as QuestionState[]) ?? []) {
-    map[row.question_id] = { confidence: row.confidence, notes: row.notes };
+  try {
+    const rows = await apiFetch<ApiState[]>("/api/v1/question-state");
+    const map: Record<string, { confidence: Confidence | null; notes: string | null }> = {};
+    for (const row of rows) {
+      map[row.questionId] = { confidence: row.confidence, notes: row.notes };
+    }
+    return map;
+  } catch {
+    return {};
   }
-  return map;
 }
 
 /** Merge per-user state over question defaults. */

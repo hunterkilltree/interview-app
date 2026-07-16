@@ -37,6 +37,8 @@ export type QuestionState = {
 export type Profile = {
   id: string;
   full_name: string | null;
+  email: string;
+  created_at: string;
   role: "member" | "admin";
 };
 
