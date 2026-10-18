@@ -6,3 +6,7 @@ out
 .vercel
 *.tsbuildinfo
 next-env.d.ts
+
+# private raw question banks (only the encoded data/quiz.enc is committed)
+data.json
+*.raw.json
