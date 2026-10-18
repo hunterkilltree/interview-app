@@ -7,6 +7,7 @@ const TABS = [
   { href: "/", label: "Dashboard" },
   { href: "/coding", label: "Coding Practice" },
   { href: "/knowledge", label: "Knowledge Base" },
+  { href: "/quiz", label: "Quiz" },
 ];
 
 export default function Nav({
