@@ -1,0 +1,5 @@
+# Question list. One question per line, fields separated by " | ":
+# section | title | difficulty (Easy/Medium/Hard) | leetcode url | default confidence (Low/Medium/High) | notes
+coding | Two Sum | Easy | https://leetcode.com/problems/two-sum/ | High | Classic hashmap lookup. O(n) time, O(n) space. Remember the complement trick.
+coding | Longest Substring Without Repeating Characters | Medium | https://leetcode.com/problems/longest-substring-without-repeating-characters/ | Medium | Sliding window + set. Watch off-by-one on window shrink.
+coding | Merge k Sorted Lists | Hard | https://leetcode.com/problems/merge-k-sorted-lists/ | Low | Revisit heap-based approach, forgot priority queue comparator syntax.

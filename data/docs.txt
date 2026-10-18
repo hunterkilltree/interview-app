@@ -1,0 +1,139 @@
+# Knowledge base notes. Each note starts with a "=== id" line, then "key: value" headers,
+# then a line "body:" followed by free text until the next "===" line.
+=== big-o-cheat-sheet
+section: coding
+type: Notes from books
+title: Big-O Cheat Sheet
+image: no
+excerpt: Quick reference for common time/space complexities across data structures.
+body:
+A condensed reference I keep coming back to before interviews.
+
+Arrays: access O(1), search O(n), insert/delete O(n).
+Hash tables: average O(1) for get/set, worst case O(n).
+Balanced BSTs: O(log n) for search/insert/delete.
+Heaps: O(log n) insert/extract, O(1) peek.
+
+Rule of thumb: if the interviewer says "as fast as possible", they usually want you to name the hashmap trade-off first, then justify it.
+=== amazon-onsite-coding-debrief
+section: coding
+type: Real interview experience
+title: Amazon Onsite — Coding Round Debrief
+image: no
+excerpt: What I was actually asked and how the conversation went.
+body:
+Got a graph traversal question disguised as a "delivery route" problem. Interviewer cared more about how I clarified constraints than the final code.
+
+What worked: restating the problem out loud, sketching the graph on the shared doc before writing any code, narrating trade-offs as I went.
+
+What I would change: I jumped to DFS too fast — should have asked about graph size first, since BFS with early exit was the better fit for their constraints.
+=== designing-for-10x-read-traffic
+section: sysdesign
+type: Best practices
+title: Designing for 10x Read Traffic
+image: no
+excerpt: A framework for reasoning about caching layers under interview time pressure.
+body:
+Start from the access pattern, not the tech. Steps I use:
+
+1. Estimate read:write ratio.
+2. Identify hot keys / celebrity problem.
+3. Pick a cache tier (CDN, app-local, distributed) per layer.
+4. Talk explicitly about invalidation — this is what separates strong answers from average ones.
+
+Interviewers consistently reward naming the invalidation strategy before being asked.
+=== rate-limiter-design-notes
+section: sysdesign
+type: Personal thoughts and solutions
+title: Rate Limiter Design Notes
+image: yes
+excerpt: Token bucket vs sliding window log, and how I sketch it on a whiteboard.
+body:
+Two approaches I default to:
+
+Token bucket: fixed refill rate, allows bursts up to bucket size. Simple to reason about, easy to distribute with Redis (INCR + TTL).
+
+Sliding window log: exact but memory-heavy at scale — store timestamps per key.
+
+I usually draw the bucket + refill arrow first, then discuss where the counter lives (local vs shared Redis) since that is usually the follow-up.
+=== saga-pattern
+section: microservices
+type: Notes from books
+title: Saga Pattern & Compensating Transactions
+image: yes
+excerpt: Choreography vs orchestration, and when each one falls apart.
+body:
+Choreography: each service listens for events and reacts — no central brain, but harder to trace failure paths past 4-5 services.
+
+Orchestration: a saga coordinator drives the steps explicitly — easier to reason about and retry, but becomes a single point of design complexity.
+
+Compensating transactions are the part people forget to mention: every forward step needs an explicit undo, and undos are not always symmetric (e.g. "cancel shipment" after it already left the warehouse).
+=== debugging-crashloopbackoff
+section: k8s
+type: Personal thoughts and solutions
+title: Debugging CrashLoopBackOff
+image: no
+excerpt: My checklist for the most common pod failure state.
+body:
+Order I check things in:
+
+1. kubectl logs --previous
+2. kubectl describe pod for events
+3. Resource limits — OOMKilled shows up here
+4. Liveness probe too aggressive?
+
+Nine times out of ten it is either a bad env var or a probe that fires before the app finishes booting.
+=== rolling-update-vs-recreate
+section: k8s
+type: Best practices
+title: Rolling Update vs Recreate
+image: yes
+excerpt: Deployment strategies and how maxSurge/maxUnavailable actually behave.
+body:
+RollingUpdate: new pods come up alongside old ones. maxSurge controls how many extra pods above desired count; maxUnavailable controls how many can be down mid-rollout. Tune both down to 0/1 for strict zero-downtime.
+
+Recreate: kills all old pods before creating new ones — simple, but guarantees downtime. Only reach for it when the app cannot run two versions side by side (e.g. shared schema migration mid-deploy).
+=== s3-consistency
+section: aws
+type: Notes from books
+title: S3 Consistency & Common Gotchas
+image: no
+excerpt: What changed in 2020 and what still trips people up in interviews.
+body:
+S3 has offered strong read-after-write consistency since December 2020 — for both new object PUTs and overwrite PUTs/DELETEs. Before that, overwrites were eventually consistent, which is still the "gotcha" answer a lot of guides expect.
+
+Still worth mentioning in an interview: consistency doesn't solve races between two concurrent writers — last writer wins, so you still need application-level locking for that case.
+=== hashmap-iteration-order
+section: java
+type: Notes from books
+title: Why HashMap Iteration Order Isn't Guaranteed
+image: no
+excerpt: Effective Java notes on collection contracts.
+body:
+HashMap makes no ordering guarantee — bucket placement depends on hashCode() and current capacity. If you need order, reach for LinkedHashMap (insertion order) or TreeMap (sorted).
+
+Code example:
+
+Map<String,Integer> m = new LinkedHashMap<>();
+m.put("b",2); m.put("a",1);
+// iterates b, a — insertion order preserved
+=== spring-bean-lifecycle
+section: spring
+type: Personal thoughts and solutions
+title: Bean Lifecycle & Scopes
+image: yes
+excerpt: The order @PostConstruct, constructor injection, and BeanPostProcessors actually run in.
+body:
+Singleton (default) vs prototype: singleton beans are created once per container and cached; prototype beans are created fresh on every lookup — Spring will not manage their destruction for you.
+
+Lifecycle order I always forget until I draw it: constructor -> dependency injection -> BeanPostProcessor.postProcessBeforeInitialization -> @PostConstruct -> postProcessAfterInitialization -> bean ready -> @PreDestroy on shutdown (singleton only).
+=== server-components-mental-model
+section: frontend
+type: Personal thoughts and solutions
+title: Server Components Mental Model
+image: no
+excerpt: How I explain RSC in interviews without hand-waving.
+body:
+The framing that finally clicked for me: server components render to a serialized tree on the server and ship zero JS for that subtree. Client components are the interactive islands.
+
+Common interview trap: being asked to fetch data in a client component when a server component would remove a network waterfall entirely.

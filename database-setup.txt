@@ -1,0 +1,41 @@
+DATABASE SETUP (Render, image from Docker Hub)
+==============================================
+
+Image:   <DOCKERHUB_USERNAME>/interview-database:latest   (Postgres 16, DB name: interviewprep)
+Tables:  NOT in the image. The backend creates them on startup with Flyway
+         (backend/src/main/resources/db/migration: V1 users, V2 content, V3 seed).
+         So: start the database FIRST, then the backend.
+
+1) Create the database service on Render
+   - New > Private Service > "Deploy an existing image from a registry"
+   - Image URL: docker.io/<DOCKERHUB_USERNAME>/interview-database:latest
+     (if the Docker Hub repo is private, add registry credentials in Render)
+   - Name: interview-database
+   - Instance type: one that supports a persistent disk (paid)
+   - Environment variables:
+       POSTGRES_USER      = postgres
+       POSTGRES_PASSWORD  = <choose a strong password, keep it secret>
+       POSTGRES_DB        = interviewprep
+       PGDATA             = /var/lib/postgresql/data/pgdata
+   - Disk: mount path /var/lib/postgresql/data  (1 GB is enough)
+     Without the disk, ALL DATA IS LOST on every redeploy.
+   - Port: 5432
+
+2) Backend environment variables (interview-backend service)
+   DATABASE_URL       = jdbc:postgresql://interview-database:5432/interviewprep
+                        (host = the private service's name on Render)
+   DATABASE_USER      = postgres
+   DATABASE_PASSWORD  = <same as POSTGRES_PASSWORD>
+   JWT_SECRET         = <openssl rand -base64 48>
+   CORS_ALLOWED_ORIGINS = <frontend URL>
+   ADMIN_EMAIL        = <your email>
+   ANTHROPIC_API_KEY  = <optional>
+
+3) Frontend environment variable (interview-frontend service)
+   API_URL            = <backend public URL>
+
+Notes
+   - Render does not back up a self-hosted Postgres. Easier option: use Render's
+     managed Postgres (or Supabase/Neon free tier), skip the interview-database
+     image, and point DATABASE_URL at it.
+   - Never commit the real passwords/secrets to git.

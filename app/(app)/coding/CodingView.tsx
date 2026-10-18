@@ -1,89 +1,32 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import ConfidenceButton from "@/components/ConfidenceButton";
 import ConfidenceDots from "@/components/ConfidenceDots";
 import DifficultyBadge from "@/components/DifficultyBadge";
-import type { Confidence, Difficulty } from "@/lib/types";
-import { setConfidence, setNotes } from "./actions";
-
-export type CodingRow = {
-  id: string;
-  title: string;
-  difficulty: Difficulty;
-  leetcode: string;
-  confidence: Confidence;
-  notes: string;
-};
+import { effectiveConfidence, effectiveNotes, useSession } from "@/lib/session";
+import type { Confidence, Question } from "@/lib/types";
 
 const LEVELS: Confidence[] = ["Low", "Medium", "High"];
 
-export default function CodingView({ rows }: { rows: CodingRow[] }) {
+export default function CodingView({ questions }: { questions: Question[] }) {
+  const { state, setConfidence, setNotes } = useSession();
   const [openId, setOpenId] = useState<string | null>(null);
-  const [localConf, setLocalConf] = useState<Record<string, Confidence>>({});
-  const [draftNotes, setDraftNotes] = useState("");
-  const [coach, setCoach] = useState<string | null>(null);
-  const [coachLoading, setCoachLoading] = useState(false);
-  const [, startTransition] = useTransition();
-  const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const merged = useMemo(
     () =>
-      rows.map((r) => ({
-        ...r,
-        confidence: localConf[r.id] ?? r.confidence,
+      questions.map((q) => ({
+        id: q.id,
+        title: q.title,
+        difficulty: q.difficulty,
+        leetcode: q.leetcode,
+        confidence: effectiveConfidence(q, state),
+        notes: effectiveNotes(q, state),
       })),
-    [rows, localConf]
+    [questions, state]
   );
 
   const open = merged.find((r) => r.id === openId) ?? null;
-
-  function openDrawer(row: CodingRow) {
-    setOpenId(row.id);
-    setDraftNotes(localNotesFor(row));
-    setCoach(null);
-  }
-
-  function localNotesFor(row: CodingRow) {
-    return row.notes;
-  }
-
-  function pickConfidence(id: string, level: Confidence) {
-    setLocalConf((m) => ({ ...m, [id]: level }));
-    startTransition(() => {
-      void setConfidence(id, level);
-    });
-  }
-
-  function changeNotes(id: string, value: string) {
-    setDraftNotes(value);
-    if (notesTimer.current) clearTimeout(notesTimer.current);
-    notesTimer.current = setTimeout(() => {
-      startTransition(() => {
-        void setNotes(id, value);
-      });
-    }, 600);
-  }
-
-  async function askCoach(row: CodingRow) {
-    setCoachLoading(true);
-    setCoach(null);
-    try {
-      const res = await fetch("/api/ai/coach", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ questionId: row.id, notes: draftNotes }),
-      });
-      const data = await res.json();
-      setCoach(
-        res.ok ? data.advice : (data.error ?? "The AI coach is unavailable right now.")
-      );
-    } catch {
-      setCoach("The AI coach is unavailable right now.");
-    } finally {
-      setCoachLoading(false);
-    }
-  }
 
   return (
     <div>
@@ -118,7 +61,7 @@ export default function CodingView({ rows }: { rows: CodingRow[] }) {
               borderTop: "1px solid var(--line)",
               cursor: "pointer",
             }}
-            onClick={() => openDrawer(q)}
+            onClick={() => setOpenId(q.id)}
           >
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 14.5 }}>{q.title}</div>
@@ -144,7 +87,7 @@ export default function CodingView({ rows }: { rows: CodingRow[] }) {
         ))}
         {merged.length === 0 && (
           <div style={{ padding: 20, color: "var(--ink-faint)", fontSize: 13.5 }}>
-            No coding questions yet — an admin can add them on the Admin screen.
+            No coding questions yet — add some to data/questions.txt.
           </div>
         )}
       </div>
@@ -214,7 +157,7 @@ export default function CodingView({ rows }: { rows: CodingRow[] }) {
                   key={level}
                   level={level}
                   selected={open.confidence === level}
-                  onClick={() => pickConfidence(open.id, level)}
+                  onClick={() => setConfidence(open.id, level)}
                 />
               ))}
             </div>
@@ -232,8 +175,8 @@ export default function CodingView({ rows }: { rows: CodingRow[] }) {
               Your notes
             </div>
             <textarea
-              value={draftNotes}
-              onChange={(e) => changeNotes(open.id, e.target.value)}
+              value={open.notes}
+              onChange={(e) => setNotes(open.id, e.target.value)}
               style={{
                 width: "100%",
                 minHeight: 160,
@@ -245,43 +188,6 @@ export default function CodingView({ rows }: { rows: CodingRow[] }) {
                 resize: "vertical",
               }}
             />
-            <div
-              style={{
-                marginTop: 22,
-                fontSize: 12,
-                fontWeight: 700,
-                color: "var(--ink-faint)",
-                textTransform: "uppercase",
-                letterSpacing: ".04em",
-                marginBottom: 10,
-              }}
-            >
-              AI coach
-            </div>
-            <button
-              className="btn btn-primary"
-              style={{ fontSize: 13, padding: "10px 18px", opacity: coachLoading ? 0.7 : 1 }}
-              disabled={coachLoading}
-              onClick={() => askCoach(open)}
-            >
-              {coachLoading ? "Thinking…" : "Get coaching tips"}
-            </button>
-            {coach && (
-              <div
-                style={{
-                  marginTop: 14,
-                  background: "var(--surface-2)",
-                  borderRadius: 14,
-                  padding: 16,
-                  fontSize: 13.5,
-                  lineHeight: 1.6,
-                  whiteSpace: "pre-line",
-                  color: "var(--ink-soft)",
-                }}
-              >
-                {coach}
-              </div>
-            )}
           </div>
         </div>
       )}
