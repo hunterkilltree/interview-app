@@ -49,7 +49,7 @@ export default async function KnowledgePage({
   );
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 24 }}>
+    <div className="kb-layout" style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 24 }}>
       <div>
         <div
           style={{
@@ -79,7 +79,7 @@ export default async function KnowledgePage({
         <h1 style={{ fontSize: 24, marginBottom: 16, fontFamily: "var(--font-display)" }}>
           Knowledge Base
         </h1>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div className="kb-cards" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           {filtered.map((d) => (
             <Link
               key={d.id}

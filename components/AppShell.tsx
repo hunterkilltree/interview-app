@@ -27,7 +27,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <Nav name={name} role="Member" initials={initials} />
-      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "32px 28px 80px" }}>
+      <div className="app-main" style={{ maxWidth: 1180, margin: "0 auto", padding: "32px 28px 80px" }}>
         {children}
       </div>
     </div>
