@@ -1,25 +1,31 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { login, signup, type AuthResult } from "./actions";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useSession } from "@/lib/session";
 
 export default function LoginForm() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
-  const [loginState, loginAction, loginPending] = useActionState<AuthResult, FormData>(
-    login,
-    undefined
-  );
-  const [signupState, signupAction, signupPending] = useActionState<AuthResult, FormData>(
-    signup,
-    undefined
-  );
+  const router = useRouter();
+  const { ready, user, signIn } = useSession();
+  const pending = false;
+  const error = undefined as string | undefined;
 
-  const error = mode === "signin" ? loginState?.error : signupState?.error;
-  const pending = mode === "signin" ? loginPending : signupPending;
+  useEffect(() => {
+    if (ready && user) router.replace("/");
+  }, [ready, user, router]);
+
+  // Mock auth: any email/password is accepted; nothing is sent anywhere.
+  function submit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    signIn(String(f.get("email") ?? ""), String(f.get("full_name") ?? ""));
+    router.replace("/");
+  }
 
   return (
     <form
-      action={mode === "signin" ? loginAction : signupAction}
+      onSubmit={submit}
       style={{ marginTop: 32, display: "flex", flexDirection: "column", gap: 12, maxWidth: 380 }}
     >
       {mode === "signup" && (

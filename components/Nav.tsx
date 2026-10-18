@@ -7,24 +7,20 @@ const TABS = [
   { href: "/", label: "Dashboard" },
   { href: "/coding", label: "Coding Practice" },
   { href: "/knowledge", label: "Knowledge Base" },
-  { href: "/admin", label: "Admin" },
 ];
 
 export default function Nav({
   name,
   role,
   initials,
-  isAdmin,
 }: {
   name: string;
   role: string;
   initials: string;
-  isAdmin: boolean;
 }) {
   const pathname = usePathname();
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
-  const tabs = TABS.filter((t) => t.href !== "/admin" || isAdmin);
   const profileActive = pathname.startsWith("/profile");
 
   return (
@@ -85,7 +81,7 @@ export default function Nav({
           </div>
         </Link>
         <div style={{ display: "flex", gap: 4, flex: 1 }}>
-          {tabs.map((t) => (
+          {TABS.map((t) => (
             <Link
               key={t.href}
               href={t.href}

@@ -1,117 +1,67 @@
-import { apiFetch } from "@/lib/api";
-import type { Confidence, Doc, Profile, Question } from "./types";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import type { Confidence, Difficulty, Doc, Question } from "./types";
 
-type PageEnvelope<T> = { content: T[] };
+// Content lives in plain text files under data/ (see data/questions.txt, data/docs.txt).
+const DATA_DIR = path.join(process.cwd(), "data");
 
-type ApiQuestion = {
-  id: string;
-  section: string;
-  title: string;
-  difficulty: Question["difficulty"];
-  leetcode: string;
-  defaultConfidence: Confidence;
-  defaultNotes: string;
-};
+async function readData(file: string): Promise<string> {
+  return (await readFile(path.join(DATA_DIR, file), "utf8")).replace(/\r\n/g, "\n");
+}
 
-type ApiDoc = {
-  id: string;
-  section: string;
-  title: string;
-  type: string;
-  excerpt: string;
-  body: string;
-  hasImage: boolean;
-};
-
-type ApiState = { questionId: string; confidence: Confidence | null; notes: string | null };
-
-type ApiUser = {
-  id: string;
-  email: string;
-  fullName: string;
-  role: "MEMBER" | "ADMIN";
-  createdAt: string;
-};
-
-export async function getProfile(): Promise<Profile | null> {
-  try {
-    const me = await apiFetch<ApiUser>("/api/v1/me");
-    return {
-      id: me.id,
-      full_name: me.fullName,
-      email: me.email,
-      created_at: me.createdAt,
-      role: me.role === "ADMIN" ? "admin" : "member",
-    };
-  } catch {
-    return null;
-  }
+function slug(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
 export async function getQuestions(): Promise<Question[]> {
-  const page = await apiFetch<PageEnvelope<ApiQuestion>>("/api/v1/questions?size=100");
-  return page.content.map((q) => ({
-    id: q.id,
-    section: q.section,
-    title: q.title,
-    difficulty: q.difficulty,
-    leetcode: q.leetcode,
-    default_confidence: q.defaultConfidence,
-    default_notes: q.defaultNotes,
-  }));
+  const text = await readData("questions.txt");
+  return text
+    .split("\n")
+    .filter((l) => l.trim() && !l.startsWith("#"))
+    .map((line) => {
+      const [section, title, difficulty, leetcode, confidence, ...notes] = line
+        .split(" | ")
+        .map((p) => p.trim());
+      return {
+        id: slug(title),
+        section,
+        title,
+        difficulty: difficulty as Difficulty,
+        leetcode,
+        default_confidence: confidence as Confidence,
+        default_notes: notes.join(" | "),
+      };
+    });
 }
 
 export async function getDocs(): Promise<Doc[]> {
-  const page = await apiFetch<PageEnvelope<ApiDoc>>("/api/v1/docs?size=100");
-  return page.content.map(mapDoc);
+  const text = await readData("docs.txt");
+  const docs: Doc[] = [];
+  for (const block of text.split(/^=== /m).slice(1)) {
+    const nl = block.indexOf("\n");
+    const id = block.slice(0, nl).trim();
+    const rest = block.slice(nl + 1);
+    const bodyAt = rest.indexOf("\nbody:\n");
+    const head = rest.slice(0, bodyAt);
+    const body = rest.slice(bodyAt + 7).trim();
+    const f: Record<string, string> = {};
+    for (const l of head.split("\n")) {
+      const i = l.indexOf(":");
+      if (i > 0) f[l.slice(0, i).trim()] = l.slice(i + 1).trim();
+    }
+    docs.push({
+      id,
+      section: f.section,
+      title: f.title,
+      type: f.type,
+      excerpt: f.excerpt,
+      body,
+      has_image: f.image === "yes",
+    });
+  }
+  return docs;
 }
 
 export async function getDoc(id: string): Promise<Doc | null> {
-  try {
-    return mapDoc(await apiFetch<ApiDoc>(`/api/v1/docs/${id}`));
-  } catch {
-    return null;
-  }
-}
-
-function mapDoc(d: ApiDoc): Doc {
-  return {
-    id: d.id,
-    section: d.section,
-    title: d.title,
-    type: d.type,
-    excerpt: d.excerpt,
-    body: d.body,
-    has_image: d.hasImage,
-  };
-}
-
-export async function getQuestionState(): Promise<
-  Record<string, { confidence: Confidence | null; notes: string | null }>
-> {
-  try {
-    const rows = await apiFetch<ApiState[]>("/api/v1/question-state");
-    const map: Record<string, { confidence: Confidence | null; notes: string | null }> = {};
-    for (const row of rows) {
-      map[row.questionId] = { confidence: row.confidence, notes: row.notes };
-    }
-    return map;
-  } catch {
-    return {};
-  }
-}
-
-/** Merge per-user state over question defaults. */
-export function effectiveConfidence(
-  q: Question,
-  state: Record<string, { confidence: Confidence | null; notes: string | null }>
-): Confidence {
-  return state[q.id]?.confidence ?? q.default_confidence;
-}
-
-export function effectiveNotes(
-  q: Question,
-  state: Record<string, { confidence: Confidence | null; notes: string | null }>
-): string {
-  return state[q.id]?.notes ?? q.default_notes ?? "";
+  return (await getDocs()).find((d) => d.id === id) ?? null;
 }
