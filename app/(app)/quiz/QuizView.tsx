@@ -1,14 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import SectionChip from "@/components/SectionChip";
-import { SECTIONS, sectionById } from "@/lib/sections";
 
 export type Card = {
   id: string;
-  section: string;
+  /** Primary topic label shown on the card. */
+  topic: string;
+  /** Every topic filter this card appears under (defaults to [topic]). */
+  topics?: string[];
   question: string;
-  answer: string;
+  /** Free-text answer, revealed on demand (flashcards). */
+  answer?: string;
+  /** Multiple-choice options keyed by letter. */
+  options?: Record<string, string>;
+  /** Correct option letter, when the bank ships an answer key. */
+  correct?: string;
   link?: string;
 };
 
@@ -29,16 +35,20 @@ const panel: React.CSSProperties = {
 };
 
 export default function QuizView({ cards }: { cards: Card[] }) {
-  const [section, setSection] = useState("all");
+  const [topic, setTopic] = useState("All");
   const [deck, setDeck] = useState<Card[] | null>(null);
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
   const [known, setKnown] = useState<string[]>([]);
   const [missed, setMissed] = useState<Card[]>([]);
+  const [unscored, setUnscored] = useState(0);
+
+  const topicsOf = (c: Card) => c.topics ?? [c.topic];
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: cards.length };
-    for (const x of cards) c[x.section] = (c[x.section] ?? 0) + 1;
+    const c: Record<string, number> = { All: cards.length };
+    for (const x of cards) for (const t of topicsOf(x)) c[t] = (c[t] ?? 0) + 1;
     return c;
   }, [cards]);
 
@@ -46,17 +56,21 @@ export default function QuizView({ cards }: { cards: Card[] }) {
     setDeck(shuffle(source));
     setIndex(0);
     setRevealed(false);
+    setPicked(null);
     setKnown([]);
     setMissed([]);
+    setUnscored(0);
   }
 
-  function answer(gotIt: boolean) {
+  function next(gotIt: boolean | null) {
     if (!deck) return;
     const c = deck[index];
-    if (gotIt) setKnown((k) => [...k, c.id]);
-    else setMissed((m) => [...m, c]);
+    if (gotIt === true) setKnown((k) => [...k, c.id]);
+    else if (gotIt === false) setMissed((m) => [...m, c]);
+    else setUnscored((u) => u + 1);
     setIndex((i) => i + 1);
     setRevealed(false);
+    setPicked(null);
   }
 
   const heading = (
@@ -67,26 +81,26 @@ export default function QuizView({ cards }: { cards: Card[] }) {
 
   // Setup screen
   if (!deck) {
-    const pool = section === "all" ? cards : cards.filter((c) => c.section === section);
-    const tabs = [{ id: "all", name: "All topics" }, ...SECTIONS.filter((s) => counts[s.id])];
+    const pool = topic === "All" ? cards : cards.filter((c) => topicsOf(c).includes(topic));
+    const tabs = Object.keys(counts);
     return (
       <div style={{ maxWidth: 720 }}>
         {heading}
         <div style={{ color: "var(--ink-soft)", fontSize: 13.5, marginBottom: 20 }}>
           Flip through every question you have collected. Read the question, try to answer
-          out loud, then reveal the answer and mark whether you got it.
+          out loud or pick an option, then check yourself.
         </div>
         <div style={panel}>
           <div style={{ fontWeight: 700, marginBottom: 12 }}>Pick a topic</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 22 }}>
             {tabs.map((t) => (
               <button
-                key={t.id}
-                className={section === t.id ? "btn btn-primary" : "btn btn-ghost"}
+                key={t}
+                className={topic === t ? "btn btn-primary" : "btn btn-ghost"}
                 style={{ fontSize: 13, padding: "8px 16px" }}
-                onClick={() => setSection(t.id)}
+                onClick={() => setTopic(t)}
               >
-                {t.name} ({counts[t.id]})
+                {t} ({counts[t]})
               </button>
             ))}
           </div>
@@ -105,16 +119,18 @@ export default function QuizView({ cards }: { cards: Card[] }) {
 
   // Results screen
   if (index >= deck.length) {
-    const pct = Math.round((known.length / deck.length) * 100);
+    const scored = deck.length - unscored;
+    const pct = scored ? Math.round((known.length / scored) * 100) : 0;
     return (
       <div style={{ maxWidth: 720 }}>
         {heading}
         <div style={{ ...panel, marginTop: 16, textAlign: "center" }}>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 44, fontWeight: 700 }}>
-            {pct}%
+            {scored ? `${pct}%` : "Done"}
           </div>
           <div style={{ color: "var(--ink-soft)", marginBottom: 22 }}>
-            You knew {known.length} of {deck.length}
+            {scored ? `You knew ${known.length} of ${scored}` : `You answered ${deck.length}`}
+            {unscored > 0 && scored > 0 && ` · ${unscored} without an answer key`}
           </div>
           <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
             {missed.length > 0 && (
@@ -149,6 +165,8 @@ export default function QuizView({ cards }: { cards: Card[] }) {
 
   // Question screen
   const c = deck[index];
+  const isChoice = !!c.options;
+  const hasKey = isChoice && !!c.correct;
   return (
     <div style={{ maxWidth: 760 }}>
       {heading}
@@ -175,11 +193,19 @@ export default function QuizView({ cards }: { cards: Card[] }) {
         </div>
       </div>
       <div style={panel}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-          <SectionChip sectionId={c.section} />
-          <span style={{ fontSize: 12, color: "var(--ink-faint)" }}>
-            {sectionById(c.section)?.name}
-          </span>
+        <div
+          style={{
+            display: "inline-block",
+            fontSize: 11.5,
+            fontWeight: 700,
+            padding: "4px 10px",
+            borderRadius: 999,
+            background: "var(--brand-soft)",
+            color: "var(--brand)",
+            marginBottom: 14,
+          }}
+        >
+          {c.topic}
         </div>
         <div
           style={{
@@ -196,7 +222,65 @@ export default function QuizView({ cards }: { cards: Card[] }) {
             Open on LeetCode ↗
           </a>
         )}
-        {revealed ? (
+
+        {isChoice ? (
+          <>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 20 }}>
+              {Object.entries(c.options!).map(([key, text]) => {
+                const chosen = picked === key;
+                const showRight = hasKey && picked !== null && key === c.correct;
+                const showWrong = hasKey && chosen && key !== c.correct;
+                return (
+                  <button
+                    key={key}
+                    disabled={picked !== null}
+                    onClick={() => setPicked(key)}
+                    style={{
+                      textAlign: "left",
+                      padding: "12px 16px",
+                      borderRadius: 14,
+                      border: `1.5px solid ${
+                        showRight
+                          ? "var(--conf-high)"
+                          : showWrong
+                            ? "var(--conf-low)"
+                            : chosen
+                              ? "var(--brand)"
+                              : "var(--line)"
+                      }`,
+                      background: chosen ? "var(--brand-soft)" : "var(--surface)",
+                      fontSize: 13.5,
+                      lineHeight: 1.5,
+                      cursor: picked === null ? "pointer" : "default",
+                      color: "var(--ink)",
+                    }}
+                  >
+                    <strong>{key}.</strong> {text}
+                  </button>
+                );
+              })}
+            </div>
+            {picked !== null && (
+              <div style={{ marginTop: 16 }}>
+                {hasKey ? (
+                  <div style={{ fontSize: 13.5, marginBottom: 12 }}>
+                    {picked === c.correct ? "Correct." : `Not quite — the answer is ${c.correct}.`}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 13, color: "var(--ink-faint)", marginBottom: 12 }}>
+                    You picked {picked}. This bank has no answer key yet, so it is not scored.
+                  </div>
+                )}
+                <button
+                  className="btn btn-primary"
+                  onClick={() => next(hasKey ? picked === c.correct : null)}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
+        ) : revealed ? (
           <>
             <div
               style={{
@@ -215,10 +299,10 @@ export default function QuizView({ cards }: { cards: Card[] }) {
               {c.answer}
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
-              <button className="btn btn-primary" onClick={() => answer(true)}>
+              <button className="btn btn-primary" onClick={() => next(true)}>
                 I knew it
               </button>
-              <button className="btn btn-ghost" onClick={() => answer(false)}>
+              <button className="btn btn-ghost" onClick={() => next(false)}>
                 Missed it
               </button>
             </div>
