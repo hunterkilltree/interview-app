@@ -76,6 +76,7 @@ export default function DashboardView({
         Here&apos;s where your prep stands across all tracks.
       </div>
       <div
+        className="dash-top"
         style={{
           display: "grid",
           gridTemplateColumns: "260px 1fr",
@@ -157,6 +158,7 @@ export default function DashboardView({
             Coding readiness + track reference
           </div>
           <div
+            className="dash-sections"
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(4,1fr)",

@@ -106,7 +106,7 @@ export default function CodingView({ questions }: { questions: Question[] }) {
         >
           <div
             style={{
-              width: 460,
+              width: "min(460px, 100%)",
               height: "100%",
               background: "var(--surface)",
               padding: "28px 28px 40px",

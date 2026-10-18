@@ -35,6 +35,7 @@ export default function Nav({
       }}
     >
       <div
+        className="nav-inner"
         style={{
           maxWidth: 1180,
           margin: "0 auto",
@@ -81,7 +82,7 @@ export default function Nav({
             software-engineer-life
           </div>
         </Link>
-        <div style={{ display: "flex", gap: 4, flex: 1 }}>
+        <div className="nav-tabs" style={{ display: "flex", gap: 4, flex: 1 }}>
           {TABS.map((t) => (
             <Link
               key={t.href}

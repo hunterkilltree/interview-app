@@ -15,6 +15,7 @@ const TILES: { accent: string; left: number; top: number; rotate: number }[] = [
 export default function LoginPage() {
   return (
     <div
+      className="login-grid"
       style={{
         minHeight: "100vh",
         display: "grid",
