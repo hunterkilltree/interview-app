@@ -38,6 +38,7 @@ export default async function QuizPage() {
     question: m.question,
     options: m.options,
     correct: m.answer,
+    explanation: m.explanation,
   }));
 
   return <QuizView cards={[...coding, ...qa, ...choice]} />;
