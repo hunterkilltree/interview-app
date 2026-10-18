@@ -15,6 +15,8 @@ export type Card = {
   options?: Record<string, string>;
   /** Correct option letter, when the bank ships an answer key. */
   correct?: string;
+  /** Why the correct option is right, shown after picking. */
+  explanation?: string;
   link?: string;
 };
 
@@ -265,6 +267,9 @@ export default function QuizView({ cards }: { cards: Card[] }) {
                 {hasKey ? (
                   <div style={{ fontSize: 13.5, marginBottom: 12 }}>
                     {picked === c.correct ? "Correct." : `Not quite — the answer is ${c.correct}.`}
+                    {c.explanation && (
+                      <div style={{ color: "var(--ink-soft)", marginTop: 6 }}>{c.explanation}</div>
+                    )}
                   </div>
                 ) : (
                   <div style={{ fontSize: 13, color: "var(--ink-faint)", marginBottom: 12 }}>

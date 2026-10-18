@@ -11,6 +11,8 @@ export type McqQuestion = {
   options: Record<string, string>;
   /** Optional answer key letter; the source bank ships without one. */
   answer?: string;
+  /** One-line reason the answer is right, shown after the user picks. */
+  explanation?: string;
 };
 
 /**
